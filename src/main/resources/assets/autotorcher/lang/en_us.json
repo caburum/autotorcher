@@ -1,0 +1,7 @@
+{
+	"category.autotorcher": "AutoTorcher",
+	"key.autotorcher.enable": "Toggle auto-placing",
+	"autotorcher.enabled": "AutoTorcher enabled",
+	"autotorcher.disabled": "AutoTorcher disabled",
+	"autotorcher.failed": "Failed to place torch"
+}
