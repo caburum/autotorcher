@@ -1,7 +1,9 @@
 package com.caburum.autotorcher;
 
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import net.fabricmc.api.ModInitializer;
-
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.block.Blocks;
@@ -28,44 +30,20 @@ public class AutoTorcherMod implements ModInitializer {
 	// This logger is used to write text to the console and the log file.
 	// It is considered best practice to use your mod id as the logger's name.
 	// That way, it's clear which mod wrote info, warnings, and errors.
-    public static final Logger LOGGER = LoggerFactory.getLogger("autotorcher");
+	public static final Logger LOGGER = LoggerFactory.getLogger("autotorcher");
 
 	private static KeyBinding enableKey;
 	private static boolean isEnabled = false;
+	private static int minLightLevel = 0;
 
-	@Override
-	public void onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
-
-		enableKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-			"key.autotorcher.enable",
-			InputUtil.Type.KEYSYM,
-			GLFW.GLFW_KEY_RIGHT_BRACKET,
-			"category.autotorcher"
-		));
-
-		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			if (client.player != null) {
-				while (enableKey.wasPressed()) {
-					isEnabled = !isEnabled;
-					client.player.sendMessage(Text.translatable(isEnabled ? "autotorcher.enabled" : "autotorcher.disabled"), true);
-				}
-				if (isEnabled)
-					placeTorchesWhileMoving(client);
-			}
-		});
-	}
-
-//	private static BlockPos lastLitPos = null;
+	//	private static BlockPos lastLitPos = null;
 
 	private static void placeTorchesWhileMoving(MinecraftClient client) {
 		World world = client.world;
 		if (world != null && client.player != null) {
 			// wait until we get a lighting update
 //			if (lastLitPos != null) {
-//				if (world.getLightLevel(LightType.BLOCK, lastLitPos) == 0) return;
+//				if (world.getLightLevel(LightType.BLOCK, lastLitPos) < lightLevel) return;
 //				lastLitPos = null;
 //			}
 
@@ -76,9 +54,9 @@ public class AutoTorcherMod implements ModInitializer {
 				for (int z = -REACH; z <= REACH; z++) {
 					BlockPos blockPos = playerBlockPos.add(x, -1, z);
 					if (world.getBlockState(blockPos).isFullCube(world, blockPos) && world.getBlockState(blockPos.up()).isAir()) {
-						int lightLevel = world.getLightLevel(LightType.BLOCK, blockPos.up());
+						int blockLightLevel = world.getLightLevel(LightType.BLOCK, blockPos.up());
 //						LOGGER.debug(blockPos + " ll " + lightLevel);
-						if (lightLevel < 1) {
+						if (blockLightLevel < minLightLevel) {
 //							LOGGER.debug("placing torch at " + blockPos);
 
 							if (!client.player.getMainHandStack().getItem().equals(Items.TORCH)) {
@@ -103,5 +81,41 @@ public class AutoTorcherMod implements ModInitializer {
 				}
 			}
 		}
+	}
+
+	@Override
+	public void onInitialize() {
+		// This code runs as soon as Minecraft is in a mod-load-ready state.
+		// However, some things (like resources) may still be uninitialized.
+		// Proceed with mild caution.
+
+		enableKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+			"key.autotorcher.enable",
+			InputUtil.Type.KEYSYM,
+			GLFW.GLFW_KEY_RIGHT_BRACKET,
+			"category.autotorcher"
+		));
+
+		ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(ClientCommandManager.literal("autotorch")
+			.then(ClientCommandManager.literal("lightlevel")
+				.then(ClientCommandManager.argument("value", IntegerArgumentType.integer(0, 15))
+					.executes(context -> {
+						final int value = IntegerArgumentType.getInteger(context, "value");
+						minLightLevel = value;
+						context.getSource().sendFeedback(Text.literal("AutoTorch level set to " + value));
+						return 1;
+					}))
+			)));
+
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (client.player != null) {
+				while (enableKey.wasPressed()) {
+					isEnabled = !isEnabled;
+					client.player.sendMessage(Text.translatable(isEnabled ? "autotorcher.enabled" : "autotorcher.disabled"), true);
+				}
+				if (isEnabled)
+					placeTorchesWhileMoving(client);
+			}
+		});
 	}
 }
